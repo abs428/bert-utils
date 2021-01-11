@@ -26,9 +26,21 @@ import pandas as pd
 import torch
 import tqdm
 import transformers
+from collections import namedtuple
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.model_selection import cross_val_score, train_test_split
+
+ModelProperties = namedtuple(
+    "ModelProperties", ["model_class", "tokenizer", "model_object"]
+)
+BERT_TYPES = {
+    "distilbert": ModelProperties(
+        model_class="DistilBertModel",
+        tokenizer="DistilBertTokenizer",
+        model_object="distilbert-base-uncased",
+    )
+}
 
 
 def encode_sentence_pair(
@@ -135,3 +147,103 @@ def train_classifier(
     test_df["prediction"] = preds
     test_df["predict_proba"] = clf.predict_proba(test_features)[:, 1]
     return clf, test_df
+
+
+def train_model(
+    train_data: pd.DataFrame,
+    text_col_1: str,
+    text_col_2: str,
+    label_col: str,
+    prod_data: pd.DataFrame = None,
+    padding: int = None,
+    batch_size: int = 1000,
+    bert_type: str = "distilbert",
+    sampling=None,
+):
+    """Main function that brings together all the pieces.
+
+    Parameters
+    ----------
+
+    Raises
+    ------
+    AssertionError
+    """
+    # Sanity checks
+    assert bert_type in BERT_TYPES, f"BERT type {bert_type} not supported."
+    assert train_data.isnull().any(None), "Nulls not permitted in train data."
+    assert prod_data.isnull().any(None), "Nulls not permitted in production data."
+    assert (
+        (label_col in train_data)
+        and (text_col_1 in train_data)
+        and (text_col_2 in train_data)
+    ), "Specified columns not present in training data."
+    assert (text_col_1 in prod_data) and (
+        text_col_2 in prod_data
+    ), "Text fields specifie are not present in production data."
+
+    properties = BERT_TYPES[bert_type]
+    model_class, tokenizer_class, pretrained_weights = (
+        getattr(transformers, properties.model_class),
+        getattr(transformers, properties.tokenizer),
+        properties.model_object,
+    )
+    tokenizer = tokenizer_class.from_pretrained(pretrained_weights)
+    model = model_class.from_pretrained(pretrained_weights)
+
+    # Sampling if there is class imbalance
+    # TODO: detect imbalance automatically
+
+    if sampling:
+        if sampling != "under":
+            raise ValueError("Only undersampling has been implemented.")
+
+        from imblearn.under_sampling import RandomUnderSampler
+
+        sampler = RandomUnderSampler(sampling_strategy="majority")
+
+        X = train_data[[col for col in train_data if col != label_col]]
+        y = train_data[label_col]
+
+        X_under, y_under = sampler.fit_resample(X, y)
+        sampled_df = pd.DataFrame(X_under, columns=X.columns)
+        sampled_df[label_col] = y_under
+    else:
+        sampled_df = train_data.copy()
+
+    if padding is None:
+        padding = max(
+            (
+                train_data[text_col_1].str.len().max(),
+                prod_data[text_col_1].str.len().max(),
+                train_data[text_col_2].str.len().max(),
+                prod_data[text_col_2].str.len().max(),
+            )
+        )
+    # Encoding input text pairs
+    print("Encoding text pairs from training data...")
+    train_input_ids, train_attn_mask = encode_sentence_pair(
+        sampled_df, text_col_1, text_col_2, tokenizer, padding
+    )
+    train_features = extract_bert_embeddings(
+        train_input_ids, train_attn_mask, model, batch_size
+    )
+    print("Training classifier...")
+    classifier, test_set = train_classifier(sampled_df, label_col, train_features)
+
+    if not prod_data:
+        return classifier, test_set
+
+    print("Encoding text pairs from production data...")
+    prod_input_ids, prod_attn_mask = encode_sentence_pair(
+        prod_data, text_col_1, text_col_2, tokenizer, padding
+    )
+    prod_features = extract_bert_embeddings(
+        prod_input_ids, prod_attn_mask, model, batch_size
+    )
+
+    print("Predicting on production data...")
+    predictions = classifier.predict(prod_features)
+    probabilities = classifier.predict_proba(prod_features)
+
+    return classifier, test_set, predictions, probabilities
