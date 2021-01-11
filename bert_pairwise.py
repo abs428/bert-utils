@@ -6,16 +6,18 @@ Example
 -------
 >>> import pandas as pd
 >>> from bert_pairwise import encode_sentence_pair, extract_bert_embeddings, train_classifier
->>> RETAIL_DESC = 'ONLINE DESCRIPTION'
+>>> RETAIL_DESC, SOURCE_DESC = 'ONLINE DESCRIPTION', 'SOURCE DESCRIPTION'
 >>> LABEL = 'tag'
+>>> BATCH_SIZE = 1000
+>>> PADDING = 46
 
 # Training the classifier
 >>> classifier, test_set = train_classifier(train_df, LABEL, train_features)
 
 # Using BERT and trained classifier
 >>> vs_data = pd.read_excel("vs_pair_data.xlsx")
->>> vs_input_ids, vs_attn_mask = encode_sentence_pair(vs_data, RETAIL_DESC, 'clean_prod_name', tokenizer, 46)
->>> vs_features = extract_bert_embeddings(vs_input_ids, vs_attn_mask, model, 1000)
+>>> vs_input_ids, vs_attn_mask = encode_sentence_pair(vs_data, RETAIL_DESC, SOURCE_DESC, tokenizer, PADDING)
+>>> vs_features = extract_bert_embeddings(vs_input_ids, vs_attn_mask, model, BATCH_SIZE)
 >>> vs_data['predictions'] = classifier.predict(vs_features)
 >>> vs_data['predict_proba'] = classifier.predict_proba(vs_features)[:,1]
 """
