@@ -158,7 +158,8 @@ def train_model(
     padding: int = None,
     batch_size: int = 1000,
     bert_type: str = "distilbert",
-    sampling=None,
+    sampling: str = None,
+    classifier=LogisticRegression(),
 ):
     """Main function that brings together all the pieces.
 
@@ -220,6 +221,8 @@ def train_model(
                 prod_data[text_col_2].str.len().max(),
             )
         )
+        print(f"Padding set to {padding} because a default was not provided.")
+        
     # Encoding input text pairs
     print("Encoding text pairs from training data...")
     train_input_ids, train_attn_mask = encode_sentence_pair(
@@ -229,7 +232,9 @@ def train_model(
         train_input_ids, train_attn_mask, model, batch_size
     )
     print("Training classifier...")
-    classifier, test_set = train_classifier(sampled_df, label_col, train_features)
+    classifier, test_set = train_classifier(
+        sampled_df, label_col, train_features, clf=classifier
+    )
 
     if not prod_data:
         return classifier, test_set
