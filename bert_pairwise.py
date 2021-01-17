@@ -165,10 +165,52 @@ def train_model(
 
     Parameters
     ----------
+    train_data: pd.DataFrame
+        The DataFrame that contains two columns to be used as
+        inputs to BERT along with a column that contains a label
+        for every pair of text
+
+    text_col_1: str
+        The field that contains the text to be sent as input to BERT
+
+    text_col_2: str
+        Another field that contains the text to be sent as input to BERT
+
+    label_col: str
+        Field that contains the labels for the classifier
+
+    prod_data: pd.DataFrame, default=None
+        The production data that takes in a DataFrame similar to `train_data`
+        but does not contain the label_col field. The field names must be
+        identical to the ones used in `train_data`. If `prod_data` is not
+        passed any input only the trained classier and the internal test set
+        is returned as input. When given valid input, predictions and the
+        corresponding probabilities are also returned additionally.
+
+    padding: int, default=None
+        Can be interpreted as one of the dimensions of the word embeddings
+        generated ie:- the length of the vector used to represent each of
+        the strings in the DataFrame.
+        TODO: This description needs more work
+
+    batch_size: int, default=1000
+        The number of string-pairs whose embeddings are computed in one
+        batch. Too big a number would result in a MemoryError.
+
+    bert_type: str, default='distilbert'
+        The version of the BERT model to be used
+
+    sampling: str, {'under'}, default=None
+        Undersamples the majority class if 'under' is passed. Other
+        sampling methods have not been implemented yet.
+
+    classifier: default=LogisticRegression()
+        A sklearn classfier that is trained on the embeddings generated
 
     Raises
     ------
     AssertionError
+        If some sanity checks fail
     """
     # Sanity checks
     assert bert_type in BERT_TYPES, f"BERT type {bert_type} not supported."
@@ -222,7 +264,7 @@ def train_model(
             )
         )
         print(f"Padding set to {padding} because a default was not provided.")
-        
+
     # Encoding input text pairs
     print("Encoding text pairs from training data...")
     train_input_ids, train_attn_mask = encode_sentence_pair(
