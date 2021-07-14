@@ -184,7 +184,7 @@ def train_model(
         but does not contain the label_col field. The field names must be
         identical to the ones used in `train_data`. If `prod_data` is not
         passed any input only the trained classier and the internal test set
-        is returned as input. When given valid input, predictions and the
+        is returned as output. When given valid input, predictions and the
         corresponding probabilities are also returned additionally.
 
     padding: int, default=None
@@ -278,7 +278,7 @@ def train_model(
         sampled_df, label_col, train_features, clf=classifier
     )
 
-    if not prod_data:
+    if prod_data is None:
         return classifier, test_set
 
     print("Encoding text pairs from production data...")
