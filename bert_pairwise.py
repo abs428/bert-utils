@@ -44,41 +44,44 @@ BERT_TYPES = {
     )
 }
 
+
 class ModelingResult(NamedTuple):
     """The object that is returned after the training
 
     Parameters
     ----------
-    classifier: 
+    classifier:
         The trained classifier that takes in word embeddings as input
-    
+
     test_set: pd.DataFrame
         The internal test set which is used to evaluate the performance
         of the model (and also tune it if one desires)
-    
+
     tokenizer:
         The tokenizer object used
-    
+
     padding: int
         The padding that was used
-    
+
     bert_model:
         The pre-trained BERT model object that was used
-    
+
     predictions: np.array
         The array of predictions on the production dataset (if provided as input)
-    
+
     probabilities: np.array
-        The array of predicted probabilities on the production dataset (if provided 
+        The array of predicted probabilities on the production dataset (if provided
         as input)
     """
-    classifier : t.Any
+
+    classifier: t.Any
     test_set: pd.DataFrame
     tokenizer: t.Any
     padding: int
     bert_model: t.Any
     predictions: np.array
     probabilities: np.array
+
 
 def encode_sentence_pair(
     data: pd.DataFrame, sent1: str, sent2: str, tokenizer, padding: int = None
@@ -243,7 +246,7 @@ def train_model(
 
     classifier: default=LogisticRegression()
         A sklearn classfier that is trained on the embeddings generated
-    
+
     Returns
     -------
     A ModelResult object
@@ -255,16 +258,18 @@ def train_model(
     """
     # Sanity checks
     assert bert_type in BERT_TYPES, f"BERT type {bert_type} not supported."
-    assert train_data.isnull().any(None), "Nulls not permitted in train data."
-    assert prod_data.isnull().any(None), "Nulls not permitted in production data."
+    assert train_data.notnull().all(None), "Nulls not permitted in train data."
     assert (
         (label_col in train_data)
         and (text_col_1 in train_data)
         and (text_col_2 in train_data)
     ), "Specified columns not present in training data."
-    assert (text_col_1 in prod_data) and (
-        text_col_2 in prod_data
-    ), "Text fields specifie are not present in production data."
+
+    if prod_data:
+        assert prod_data.notnull().all(None), "Nulls not permitted in production data."
+        assert (text_col_1 in prod_data) and (
+            text_col_2 in prod_data
+        ), "Text fields specifie are not present in production data."
 
     properties = BERT_TYPES[bert_type]
     model_class, tokenizer_class, pretrained_weights = (
@@ -320,13 +325,14 @@ def train_model(
     )
 
     if prod_data is None:
-        return ModelingResult(classifier=classifier,
-        test_set=test_set,
-        tokenizer=tokenizer,
-        padding=padding,
-        bert_model=model,
-        predictions=None,
-        probabilities=None,
+        return ModelingResult(
+            classifier=classifier,
+            test_set=test_set,
+            tokenizer=tokenizer,
+            padding=padding,
+            bert_model=model,
+            predictions=None,
+            probabilities=None,
         )
 
     print("Encoding text pairs from production data...")
@@ -341,11 +347,12 @@ def train_model(
     predictions = classifier.predict(prod_features)
     probabilities = classifier.predict_proba(prod_features)
 
-    return ModelingResult(classifier=classifier,
+    return ModelingResult(
+        classifier=classifier,
         test_set=test_set,
         tokenizer=tokenizer,
         padding=padding,
         bert_model=model,
         predictions=predictions,
         probabilities=probabilities,
-        )
+    )
