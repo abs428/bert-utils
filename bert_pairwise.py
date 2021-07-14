@@ -27,6 +27,8 @@ import torch
 import tqdm
 import transformers
 from collections import namedtuple
+import typing as t
+from typing import NamedTuple
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.model_selection import cross_val_score, train_test_split
@@ -42,6 +44,41 @@ BERT_TYPES = {
     )
 }
 
+class ModelingResult(NamedTuple):
+    """The object that is returned after the training
+
+    Parameters
+    ----------
+    classifier: 
+        The trained classifier that takes in word embeddings as input
+    
+    test_set: pd.DataFrame
+        The internal test set which is used to evaluate the performance
+        of the model (and also tune it if one desires)
+    
+    tokenizer:
+        The tokenizer object used
+    
+    padding: int
+        The padding that was used
+    
+    bert_model:
+        The pre-trained BERT model object that was used
+    
+    predictions: np.array
+        The array of predictions on the production dataset (if provided as input)
+    
+    probabilities: np.array
+        The array of predicted probabilities on the production dataset (if provided 
+        as input)
+    """
+    classifier : t.Any
+    test_set: pd.DataFrame
+    tokenizer: t.Any
+    padding: int
+    bert_model: t.Any
+    predictions: np.array
+    probabilities: np.array
 
 def encode_sentence_pair(
     data: pd.DataFrame, sent1: str, sent2: str, tokenizer, padding: int = None
@@ -160,7 +197,7 @@ def train_model(
     bert_type: str = "distilbert",
     sampling: str = None,
     classifier=LogisticRegression(),
-):
+) -> ModelingResult:
     """Main function that brings together all the pieces.
 
     Parameters
@@ -206,6 +243,10 @@ def train_model(
 
     classifier: default=LogisticRegression()
         A sklearn classfier that is trained on the embeddings generated
+    
+    Returns
+    -------
+    A ModelResult object
 
     Raises
     ------
@@ -279,7 +320,14 @@ def train_model(
     )
 
     if prod_data is None:
-        return classifier, test_set
+        return ModelingResult(classifier=classifier,
+        test_set=test_set,
+        tokenizer=tokenizer,
+        padding=padding,
+        bert_model=model,
+        predictions=None,
+        probabilities=None,
+        )
 
     print("Encoding text pairs from production data...")
     prod_input_ids, prod_attn_mask = encode_sentence_pair(
@@ -293,4 +341,11 @@ def train_model(
     predictions = classifier.predict(prod_features)
     probabilities = classifier.predict_proba(prod_features)
 
-    return classifier, test_set, predictions, probabilities
+    return ModelingResult(classifier=classifier,
+        test_set=test_set,
+        tokenizer=tokenizer,
+        padding=padding,
+        bert_model=model,
+        predictions=predictions,
+        probabilities=probabilities,
+        )
